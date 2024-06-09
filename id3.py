@@ -1,99 +1,65 @@
+import streamlit as st
+import pandas as pd
 import numpy as np
-from collections import Counter
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, export_graphviz
+from sklearn import tree
+import graphviz
 
-class Node:
-    def __init__(self, attribute=None, label=None):
-        self.attribute = attribute  # Attribute used for splitting
-        self.label = label  # Class label if it's a leaf node
-        self.children = {}  # Dictionary to store child nodes
+st.write("Team: 22AIA-FANATICS")
+st.title("Decision Tree (ID3) Algorithm Demonstration")
 
-def entropy(data):
-    # Calculate entropy of a dataset
-    labels = [row[-1] for row in data]
-    label_counts = Counter(labels)
-    entropy = 0
-    for count in label_counts.values():
-        probability = count / len(labels)
-        entropy -= probability * np.log2(probability)
-    return entropy
+@st.cache
+def load_data(file):
+    data = pd.read_csv(file)
+    return data
 
-def information_gain(data, attribute_index):
-    # Calculate information gain of splitting the dataset on a particular attribute
-    total_entropy = entropy(data)
-    attribute_values = set([row[attribute_index] for row in data])
-    weighted_entropy = 0
-    for value in attribute_values:
-        subset = [row for row in data if row[attribute_index] == value]
-        subset_entropy = entropy(subset)
-        weighted_entropy += (len(subset) / len(data)) * subset_entropy
-    return total_entropy - weighted_entropy
-
-def majority_label(data):
-    # Return the majority class label in a dataset
-    labels = [row[-1] for row in data]
-    return Counter(labels).most_common(1)[0][0]
-
-def id3(data, attributes):
-    # Base cases
-    if len(set([row[-1] for row in data])) == 1:
-        # If all instances have the same class label, return a leaf node
-        return Node(label=data[0][-1])
-    if len(attributes) == 0:
-        # If there are no more attributes to split on, return a leaf node with majority label
-        return Node(label=majority_label(data))
+def build_and_train_decision_tree(data, target_column):
+    features = data.drop(target_column, axis=1)
+    target = data[target_column]
     
-    # Find the best attribute to split on
-    gains = [information_gain(data, i) for i in range(len(attributes))]
-    best_attribute_index = np.argmax(gains)
-    best_attribute = attributes[best_attribute_index]
+    X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.3, random_state=42)
     
-    # Create a new node with the best attribute
-    node = Node(attribute=best_attribute)
+    clf = DecisionTreeClassifier(criterion="entropy")
+    clf.fit(X_train, y_train)
     
-    # Recursively construct subtree for each value of the best attribute
-    attribute_values = set([row[best_attribute_index] for row in data])
-    for value in attribute_values:
-        subset = [row[:-1] for row in data if row[best_attribute_index] == value]
-        child_attributes = attributes[:best_attribute_index] + attributes[best_attribute_index+1:]
-        child_node = id3(subset, child_attributes)
-        node.children[value] = child_node
+    accuracy = clf.score(X_test, y_test)
+    return clf, accuracy, features.columns
+
+def visualize_tree(clf, feature_names):
+    dot_data = tree.export_graphviz(clf, out_file=None, 
+                                    feature_names=feature_names,  
+                                    class_names=clf.classes_,  
+                                    filled=True, rounded=True,  
+                                    special_characters=True)  
+    graph = graphviz.Source(dot_data)  
+    return graph
+
+st.write("Upload your CSV file")
+uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+
+if uploaded_file is not None:
+    data = load_data(uploaded_file)
+    st.write("Training Data:")
+    st.write(data)
     
-    return node
-
-def predict(tree, instance):
-    # Predict the class label for a single instance using the decision tree
-    if tree.label is not None:
-        # If the node is a leaf node, return the class label
-        return tree.label
-    attribute_value = instance[tree.attribute]
-    if attribute_value not in tree.children:
-        # If the attribute value is not seen during training, return majority label
-        return majority_label([instance])
-    child_node = tree.children[attribute_value]
-    return predict(child_node, instance)
-
-# Example usage:
-data = [
-    ['Sunny', 'Hot', 'High', 'Weak', 'No'],
-    ['Sunny', 'Hot', 'High', 'Strong', 'No'],
-    ['Overcast', 'Hot', 'High', 'Weak', 'Yes'],
-    ['Rain', 'Mild', 'High', 'Weak', 'Yes'],
-    ['Rain', 'Cool', 'Normal', 'Weak', 'Yes'],
-    ['Rain', 'Cool', 'Normal', 'Strong', 'No'],
-    ['Overcast', 'Cool', 'Normal', 'Strong', 'Yes'],
-    ['Sunny', 'Mild', 'High', 'Weak', 'No'],
-    ['Sunny', 'Cool', 'Normal', 'Weak', 'Yes'],
-    ['Rain', 'Mild', 'Normal', 'Weak', 'Yes'],
-    ['Sunny', 'Mild', 'Normal', 'Strong', 'Yes'],
-    ['Overcast', 'Mild', 'High', 'Strong', 'Yes'],
-    ['Overcast', 'Hot', 'Normal', 'Weak', 'Yes'],
-    ['Rain', 'Mild', 'High', 'Strong', 'No']
-]
-
-attributes = [0, 1, 2, 3]  # Indices of attributes
-tree = id3(data, attributes)
-
-# Predicting a new instance
-new_instance = ['Sunny', 'Mild', 'High', 'Weak']
-prediction = predict(tree, new_instance)
-print("Prediction:", prediction)
+    target_column = st.selectbox("Select the target column", data.columns)
+    
+    if target_column:
+        clf, accuracy, feature_names = build_and_train_decision_tree(data, target_column)
+        
+        st.write(f"Model Accuracy: {accuracy * 100:.2f}%")
+        
+        st.write("Decision Tree Visualization:")
+        graph = visualize_tree(clf, feature_names)
+        st.graphviz_chart(graph)
+        
+        st.write("Classify a new sample")
+        new_sample = {}
+        for feature in feature_names:
+            new_sample[feature] = st.text_input(f"Enter value for {feature}")
+        
+        if st.button("Classify"):
+            sample_df = pd.DataFrame([new_sample])
+            prediction = clf.predict(sample_df)
+            st.write(f"Predicted class: {prediction[0]}")
