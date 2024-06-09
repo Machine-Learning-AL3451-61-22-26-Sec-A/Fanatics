@@ -1,7 +1,7 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-st.write("Team: 22AIA-WEBSPIRITS")
+st.write("Team: 22AIA-FANATICS")
 
 st.title("Artificial Neural Network with Backpropagation")
 
