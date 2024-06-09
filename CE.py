@@ -1,65 +1,60 @@
 import streamlit as st
+import pandas as pd
 import numpy as np
 
-class CandidateElimination:
-    def __init__(self, num_attributes):
-        # Initialize the most specific and most general hypotheses
-        self.S = ['0'] * num_attributes  # Most specific hypothesis
-        self.G = ['?'] * num_attributes  # Most general hypothesis
-
-    def eliminate(self, X, y):
-        for i in range(len(X)):
-            x = X[i]
-            if y[i] == 'Yes':  # Positive instance
-                self.eliminate_negative(x)
-            else:  # Negative instance
-                self.eliminate_positive(x)
-
-    def eliminate_positive(self, x):
-        # Remove inconsistent hypotheses from S
-        for i in range(len(self.S)):
-            if self.S[i] != x[i]:
-                self.S[i] = '?' if self.S[i] != '?' else x[i]
-        
-        # Refine G
-        for i in range(len(self.G)):
-            if self.G[i] != '?' and self.G[i] != x[i]:
-                self.G[i] = '?'
-
-    def eliminate_negative(self, x):
-        # Remove inconsistent hypotheses from G
-        for i in range(len(self.G)):
-            if self.G[i] != '?' and self.G[i] != x[i]:
-                self.G[i] = '?' if self.S[i] == '?' else self.S[i]
-
-    def print_hypotheses(self):
-        st.write("Most specific hypothesis (S):", ''.join(self.S))
-        st.write("Most general hypothesis (G):", ''.join(self.G))
+st.write("Team: 22AIA-FANATICS")
+st.title("Candidate-Elimination Algorithm")
 
 
-def main():
-    st.title("Candidate Elimination Algorithm")
+def load_data(file):
+    data = pd.read_csv(file)
+    return data
 
-    num_instances = st.number_input("Enter the number of instances:", min_value=1, step=1)
-    num_attributes = st.number_input("Enter the number of attributes:", min_value=1, step=1)
+def candidate_elimination(data):
+    # Extract features and target
+    features = data.iloc[:, :-1]
+    target = data.iloc[:, -1]
+    num_features = features.shape[1]
 
-    X = []
-    y = []
+    # Initialize the most specific hypothesis (S) and most general hypothesis (G)
+    S = ['0'] * num_features
+    G = [['?'] * num_features]
 
-    for i in range(num_instances):
-        instance = []
-        st.write(f"Instance {i + 1}:")
-        for j in range(num_attributes):
-            attribute = st.selectbox(f"Select attribute {j + 1} value for instance {i + 1}:", ['Yes', 'No'])
-            instance.append(attribute)
-        label = st.radio(f"Select label for instance {i + 1}:", ['Yes', 'No'])
-        X.append(instance)
-        y.append(label)
+    for i, instance in features.iterrows():
+        if target[i] == 'Yes':  # For positive instances
+            for j in range(num_features):
+                if S[j] == '0':
+                    S[j] = instance[j]
+                elif S[j] != instance[j]:
+                    S[j] = '?'
+            G = [g for g in G if all(g[k] == '?' or g[k] == instance[k] for k in range(num_features))]
+        elif target[i] == 'No':  # For negative instances
+            G_new = []
+            for g in G:
+                for j in range(num_features):
+                    if g[j] == '?':
+                        for value in np.unique(features.iloc[:, j]):
+                            if value != instance[j]:
+                                g_new = g[:]
+                                g_new[j] = value
+                                if all(g_new[k] == '?' or g_new[k] == S[k] or S[k] == '0' for k in range(num_features)):
+                                    G_new.append(g_new)
+            G = G_new
+    return S, G
 
-    if st.button("Run Algorithm"):
-        ce = CandidateElimination(num_attributes=num_attributes)
-        ce.eliminate(X, y)
-        ce.print_hypotheses()
+st.write("Upload your CSV file")
+uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
 
-if __name__ == "__main__":
-    main()
+if uploaded_file is not None:
+    data = load_data(uploaded_file)
+    st.write("Training Data:")
+    st.write(data)
+
+    S, G = candidate_elimination(data)
+    
+    st.write("Most Specific Hypothesis (S):")
+    st.write(S)
+    
+    st.write("Most General Hypothesis (G):")
+    for g in G:
+        st.write(g)
